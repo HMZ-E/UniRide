@@ -94,7 +94,7 @@ The accompanying service uses Python's standard library and SQLite WAL. Seat dec
 - Booking conversations and booking records are visible to their participants.
 - Other users' email addresses are omitted from public profiles.
 - Reviews require a confirmed passenger and a completed trip.
-- Verification codes and credentials stay on the backend; entering a university name alone does not award a badge.
+- SMTP and Apple push credentials stay on the backend; entering a university name alone does not award a badge.
 
 See the [API, deployment and configuration guide](backend/README.md) and [environment template](backend/environment.example).
 
