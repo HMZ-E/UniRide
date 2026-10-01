@@ -1,0 +1,14 @@
+# Set these in the server environment; do not commit credentials.
+UNIRIDE_SMTP_HOST=
+UNIRIDE_SMTP_PORT=587
+UNIRIDE_SMTP_FROM=
+UNIRIDE_SMTP_USER=
+UNIRIDE_SMTP_PASSWORD=
+# Exact university email domains that you have confirmed belong to pilot schools.
+UNIRIDE_STUDENT_DOMAINS=
+# APNs provider key stored outside the repository, never bundled in the iOS app.
+UNIRIDE_APNS_KEY_FILE=
+UNIRIDE_APNS_KEY_ID=
+UNIRIDE_APNS_TEAM_ID=
+UNIRIDE_APNS_TOPIC=HMZ.UniRide
+UNIRIDE_APNS_ENV=development
