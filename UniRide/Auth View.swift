@@ -1,139 +1,86 @@
 import SwiftUI
 
 struct AuthView: View {
-    @EnvironmentObject var authManager: AuthManager
-    @State private var selectedTab = 0
-    @State private var isLoading = false
-    @State private var showError = false
-    @State private var errorMessage = ""
-    
-    // Form fields
+    @EnvironmentObject private var store: AppStore
+    @State private var creatingAccount = false
+    @State private var name = ""
+    @State private var university = "Université Hassan I"
     @State private var email = ""
     @State private var password = ""
-    @State private var firstName = ""
-    @State private var lastName = ""
-    @State private var studentId = ""
-    @State private var phone = ""
-    
+    @State private var showingServer = false
+    @FocusState private var passwordFocused: Bool
     var body: some View {
+        NavigationStack {
         GeometryReader { geometry in
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Header
-                    VStack(spacing: 16) {
-                        Spacer(minLength: 60)
-                        ZStack {
-                            Circle().fill(Color.green).frame(width: 80, height: 80)
-                            Image(systemName: "graduationcap.fill").font(.system(size: 32)).foregroundColor(.white)
+            ZStack {
+                NetworkBackground()
+                ScrollView {
+                    VStack(spacing: 24) {
+                        HStack {
+                            Menu {
+                                Button("English") { store.language = "en" }
+                                Button("Français") { store.language = "fr" }
+                                Button("العربية") { store.language = "ar" }
+                            } label: { Label("Language", systemImage: "globe").font(.caption) }
+                            Spacer()
+                            Button { showingServer = true } label: { Image(systemName: "server.rack").frame(width: 44, height: 44) }.accessibilityLabel("Server settings")
                         }
-                        VStack(spacing: 8) {
-                            Text("UniRide").font(.largeTitle).fontWeight(.bold).foregroundColor(.primary)
-                            Text("Student ride sharing made simple").font(.subheadline).foregroundColor(.secondary)
+                        VStack(spacing: 14) {
+                            UniRideLogo(size: 90, glow: true)
+                            Text("UniRide").font(.system(size: 34, weight: .bold))
+                            Text("For Students By Students").font(.subheadline).foregroundStyle(.white.opacity(0.85))
                         }
-                        Spacer(minLength: 40)
-                    }
-                    .frame(minHeight: geometry.size.height * 0.4)
-                    
-                    // Form Card
-                    VStack(spacing: 0) {
-                        HStack(spacing: 0) {
-                            Button("Login") { withAnimation { selectedTab = 0 } }
-                                .foregroundColor(selectedTab == 0 ? .primary : .secondary)
-                                .fontWeight(selectedTab == 0 ? .semibold : .regular)
-                                .frame(maxWidth: .infinity).padding(.vertical, 12)
-                                .background(selectedTab == 0 ? Color(.systemBackground) : Color.clear)
-                                .cornerRadius(8)
-                            
-                            Button("Sign Up") { withAnimation { selectedTab = 1 } }
-                                .foregroundColor(selectedTab == 1 ? .primary : .secondary)
-                                .fontWeight(selectedTab == 1 ? .semibold : .regular)
-                                .frame(maxWidth: .infinity).padding(.vertical, 12)
-                                .background(selectedTab == 1 ? Color(.systemBackground) : Color.clear)
-                                .cornerRadius(8)
-                        }
-                        .padding(4).background(Color(.systemGray6)).cornerRadius(10).padding(.bottom, 24)
-                        
-                        if selectedTab == 0 { LoginForm() } else { SignUpForm() }
-                    }
-                    .padding(24)
-                    .background(Color(.systemBackground))
-                    .cornerRadius(16, corners: [.topLeft, .topRight])
-                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -5)
+                        VStack(spacing: 14) {
+                            if creatingAccount {
+                                Text("Create your account").font(.title3.bold())
+                                TextField("Full name", text: $name).textContentType(.name).uniRideField()
+                                TextField("University", text: $university).uniRideField()
+                            }
+                            TextField("Email", text: $email).keyboardType(.emailAddress)
+                                .textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.username)
+                                .submitLabel(.next).onSubmit { passwordFocused = true }.uniRideField()
+                            SecureField("Password (10+ characters)", text: $password)
+                                .textContentType(creatingAccount ? .newPassword : .password).focused($passwordFocused)
+                                .submitLabel(.go).onSubmit(submit).uniRideField()
+                            Button(action: submit) {
+                                HStack { if store.isBusy { ProgressView().tint(.black) }; Text(creatingAccount ? store.text("Create Account") : store.text("Sign In")) }
+                            }.buttonStyle(LimeButtonStyle()).disabled(store.isBusy || !valid)
+                            Button { withAnimation(.easeInOut(duration: 0.2)) { creatingAccount.toggle() } } label: {
+                                Text(creatingAccount ? store.text("Already a student? Sign in") : store.text("New student? Create account"))
+                                    .font(.caption).foregroundStyle(UniRideTheme.muted).frame(minHeight: 44)
+                            }
+                        }.padding(16).background(UniRideTheme.card.opacity(0.98), in: RoundedRectangle(cornerRadius: 28))
+                        Button("Preview the app") { store.previewApp() }.font(.subheadline).frame(minHeight: 44)
+                        Text("Preview data is separate from real accounts.").font(.caption).foregroundStyle(UniRideTheme.muted)
+                        if store.restoring { ProgressView() }
+                    }.frame(maxWidth: 420).padding(.horizontal, 24).padding(.vertical, 16)
+                        .frame(maxWidth: .infinity).frame(minHeight: geometry.size.height, alignment: .top)
+                }.scrollDismissesKeyboard(.interactively)
+            }
+        }.keyboardDone().toolbar(.hidden, for: .navigationBar)
+        }.sheet(isPresented: $showingServer) { ServerSettingsView() }
+    }
+    private func submit() {
+        guard valid && !store.isBusy else { return }
+        passwordFocused = false
+        Task { await store.authenticate(name: creatingAccount ? name : nil, email: email, password: password, university: university) }
+    }
+    private var valid: Bool { email.contains("@") && password.count >= 10 && (!creatingAccount || (!name.trimmingCharacters(in: .whitespaces).isEmpty && !university.isEmpty)) }
+}
+struct ServerSettingsView: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var address = ""
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Server address") {
+                    TextField("https://api.example.com", text: $address).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Text("For development, use your Mac’s local address on the same Wi-Fi. Hosted servers must use HTTPS.").font(.caption).foregroundStyle(.secondary)
                 }
-            }
-            .ignoresSafeArea(.all, edges: .bottom)
-        }
-        .background(LinearGradient(gradient: Gradient(colors: [Color.green.opacity(0.1), Color.blue.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing))
-        .alert("Error", isPresented: $showError) { Button("OK") { } } message: { Text(errorMessage) }
-    }
-    
-    @ViewBuilder
-    private func LoginForm() -> some View {
-        VStack(spacing: 20) {
-            TextField("University Email", text: $email)
-                .keyboardType(.emailAddress)
-                .autocapitalization(.none)
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(10)
-            
-            SecureField("Password", text: $password)
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(10)
-            
-            Button(action: handleSignIn) {
-                HStack {
-                    if isLoading { ProgressView().padding(.trailing, 5) }
-                    Text("Sign In")
-                }
-                .frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(10)
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private func SignUpForm() -> some View {
-        VStack(spacing: 16) {
-            HStack {
-                TextField("First Name", text: $firstName)
-                TextField("Last Name", text: $lastName)
-            }
-            TextField("Email", text: $email).keyboardType(.emailAddress).autocapitalization(.none)
-            TextField("Student ID", text: $studentId)
-            TextField("Phone", text: $phone).keyboardType(.phonePad)
-            SecureField("Password", text: $password)
-            
-            Button(action: handleSignUp) {
-                HStack {
-                    if isLoading { ProgressView().padding(.trailing, 5) }
-                    Text("Create Account")
-                }
-                .frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(10)
-            }
-        }
-        .textFieldStyle(RoundedBorderTextFieldStyle())
-    }
-    
-    private func handleSignIn() {
-        isLoading = true
-        Task {
-            let success = await authManager.signIn(email: email, password: password)
-            await MainActor.run {
-                isLoading = false
-                if !success { errorMessage = "Invalid credentials"; showError = true }
-            }
-        }
-    }
-    
-    private func handleSignUp() {
-        isLoading = true
-        Task {
-            let success = await authManager.signUp(firstName: firstName, lastName: lastName, email: email, studentId: studentId, phone: phone, password: password)
-            await MainActor.run {
-                isLoading = false
-                if !success { errorMessage = "Registration failed"; showError = true }
-            }
+                Button("Save") { store.setServer(address); dismiss() }.disabled(URL(string: address)?.host == nil)
+            }.navigationTitle("Server settings").navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar).keyboardDone()
+                .toolbar { Button("Close") { dismiss() } }.onAppear { address = store.endpoint }
         }
     }
 }

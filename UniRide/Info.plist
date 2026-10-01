@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+<key>NSLocalNetworkUsageDescription</key><string>Connect to your UniRide development server on the same local network.</string>
+<key>UniRideAPIURL</key><string>$(UNIRIDE_API_URL)</string>
+<key>UniRideRemotePushEnabled</key><false/>
+<key>CFBundleLocalizations</key><array><string>en</string><string>fr</string><string>ar</string></array>
+</dict></plist>

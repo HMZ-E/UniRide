@@ -11,7 +11,7 @@ extension View {
     func cardStyle() -> some View {
         self
             .padding(20)
-            .background(Color(UIColor.systemBackground)) // FIXED: Explicit UIColor
+            .background(UniRideTheme.card) // FIXED: Explicit UIColor
             .cornerRadius(16)
             .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
     }

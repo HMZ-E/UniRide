@@ -1,102 +1,59 @@
 import SwiftUI
-import UIKit
 
-enum LocationPickerType {
-    case from, to
-}
-
-struct RequestRideView: View {
+struct OfferRideView: View {
+    @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    @State private var fromLocation: Location?
-    @State private var toLocation: Location?
-    @State private var departureDate = Date()
-    @State private var passengers = 1
-    @State private var showingLocationPicker = false
-    @State private var locationPickerType: LocationPickerType = .from
-    
-    var isFormValid: Bool { fromLocation != nil && toLocation != nil }
-    
+    @State private var fromId = "station"
+    @State private var toId = "ista2"
+    @State private var departure = Date().addingTimeInterval(3600)
+    @State private var price = "6"
+    @State private var seats = 2
+    @State private var note = ""
+    @State private var days: Set<Int> = []
+    private var hasCar: Bool { !(store.user?.carModel.isEmpty ?? true) && !(store.user?.carColor.isEmpty ?? true) && !(store.user?.plate.isEmpty ?? true) }
+    private var valid: Bool { fromId != toId && (1...200).contains(Double(price.replacingOccurrences(of: ",", with: ".")) ?? 0) && !note.trimmingCharacters(in: .whitespaces).isEmpty && note.count <= 300 && hasCar }
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
-                    // Route Selection
+                VStack(alignment: .leading, spacing: 24) {
+                    Text("Share your campus commute").font(.title2.bold())
+                    if !hasCar {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Add your car details before offering a ride.").font(.subheadline)
+                            NavigationLink("Add car details") { EditProfileView() }.font(.subheadline.bold())
+                        }.cardStyle()
+                    }
+                    VStack(spacing: 12) { PlaceMenu(title: "From", selection: $fromId); PlaceMenu(title: "To", selection: $toId) }
+                    DatePicker("Departure", selection: $departure, in: Date().addingTimeInterval(60)...Date().addingTimeInterval(90 * 86400))
                     VStack(alignment: .leading, spacing: 16) {
-                        Label("Where are you going?", systemImage: "location.circle.fill")
-                            .font(.headline)
-                        
-                        LocationPickerButton(title: "From", location: fromLocation, placeholder: "Pick up location") {
-                            locationPickerType = .from
-                            showingLocationPicker = true
+                        HStack { Text("Price per seat (Dhs)"); Spacer(); TextField("6", text: $price).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 80) }
+                        Stepper("\(seats) seats", value: $seats, in: 1...6)
+                    }.cardStyle()
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Meeting point").font(.headline)
+                        TextField("Entrance, landmark and how to find your car", text: $note, axis: .vertical).lineLimit(3...5).uniRideField()
+                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Repeat commute", systemImage: "repeat").font(.headline)
+                        HStack(spacing: 6) {
+                            ForEach(1...7, id: \.self) { day in
+                                Button { if days.contains(day) { days.remove(day) } else { days.insert(day) } } label: {
+                                    Text(store.text(["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][day-1])).font(.caption2.bold()).frame(maxWidth: .infinity, minHeight: 44)
+                                        .foregroundStyle(days.contains(day) ? .black : .white).background(days.contains(day) ? UniRideTheme.lime : UniRideTheme.card, in: RoundedRectangle(cornerRadius: 10))
+                                }.accessibilityAddTraits(days.contains(day) ? .isSelected : [])
+                            }
                         }
-                        
-                        LocationPickerButton(title: "To", location: toLocation, placeholder: "Drop off location") {
-                            locationPickerType = .to
-                            showingLocationPicker = true
+                        Text(days.isEmpty ? store.text("One departure") : store.text("Repeats for two weeks. Each departure has its own seats.")).font(.caption).foregroundStyle(UniRideTheme.muted)
+                    }
+                    Button("Publish ride") {
+                        Task {
+                            let body: [String: Any] = ["fromId": fromId, "toId": toId, "departureTime": departure.timeIntervalSince1970, "price": Double(price.replacingOccurrences(of: ",", with: ".")) ?? 0, "totalSeats": seats, "pickupNote": note, "repeatWeekdays": days.sorted()]
+                            if await store.perform("/rides", body: body, success: "Ride published") { dismiss() }
                         }
-                    }
-                    .cardStyle()
-                    
-                    // Departure Time
-                    VStack(alignment: .leading, spacing: 16) {
-                        Label("When?", systemImage: "clock.circle.fill").font(.headline)
-                        DatePicker("Departure Time", selection: $departureDate, in: Date()...)
-                    }
-                    .cardStyle()
-                    
-                    // Passengers
-                    VStack(alignment: .leading, spacing: 16) {
-                        Label("Passengers", systemImage: "person.2.fill").font(.headline)
-                        Stepper("\(passengers) Passenger(s)", value: $passengers, in: 1...4)
-                    }
-                    .cardStyle()
-                    
-                    Button("Search Rides") {
-                        dismiss()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(isFormValid ? Color.green : Color.gray)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                    .disabled(!isFormValid)
-                }
-                .padding()
-            }
-            .background(Color(UIColor.systemGroupedBackground))
-            .navigationTitle("Request Ride")
-            .toolbar { Button("Cancel") { dismiss() } }
-            .sheet(isPresented: $showingLocationPicker) {
-                // Simple list to pick a sample location
-                List(Location.sampleLocations) { loc in
-                    Button(loc.name) {
-                        if locationPickerType == .from { fromLocation = loc } else { toLocation = loc }
-                        showingLocationPicker = false
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct LocationPickerButton: View {
-    let title: String
-    let location: Location?
-    let placeholder: String
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(title).font(.caption).foregroundColor(.secondary)
-                    Text(location?.name ?? placeholder)
-                        .foregroundColor(location == nil ? .secondary : .primary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundColor(.gray)
-            }
-            .padding().background(Color(UIColor.systemGray6)).cornerRadius(8)
+                    }.buttonStyle(LimeButtonStyle()).disabled(!valid || store.isBusy)
+                }.padding(20)
+            }.background(.black).navigationTitle("Offer a ride").navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar).keyboardDone()
+                .toolbar { Button("Close") { dismiss() } }
         }
     }
 }
